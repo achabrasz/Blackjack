@@ -4,83 +4,117 @@ from game.Game import Game
 class GameGUI(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Blackjack")
+        self.title("Blackjack Table")
         self.resizable(False, False)
 
-        self.game = Game()
+        self.game = Game(num_slots=7)
+        self.player_seat = None  # chosen seat index
         self._build_ui()
-        self.start_new_round()
 
     def _build_ui(self):
-        pad = 8
-        dealer_frame = tk.LabelFrame(self, text="Dealer", padx=pad, pady=pad)
-        dealer_frame.grid(row=0, column=0, columnspan=2, sticky="ew", padx=pad, pady=pad)
+        self.canvas = tk.Canvas(self, width=800, height=600, bg="white")
+        self.canvas.pack()
 
-        self.dealer_hand_label = tk.Label(dealer_frame, text="", font=("Helvetica", 12))
-        self.dealer_hand_label.pack(anchor="w")
+        # draw 7 seat circles
+        self.seat_coords = []
+        radius = 30
+        self.player_texts = []  # holds card text per seat
 
-        self.dealer_value_label = tk.Label(dealer_frame, text="", font=("Helvetica", 10))
-        self.dealer_value_label.pack(anchor="w")
+        for i in range(7):
+            x = 100 + i * 100
+            y = 500
+            seat = self.canvas.create_oval(x - radius, y - radius, x + radius, y + radius,
+                                           fill="gray", tags=f"seat{i}")
+            self.canvas.tag_bind(seat, "<Button-1>", lambda e, idx=i: self.choose_seat(idx))
+            self.seat_coords.append((x, y))
 
-        player_frame = tk.LabelFrame(self, text="Player", padx=pad, pady=pad)
-        player_frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=pad, pady=0)
+            # card text placeholder for this seat
+            text_id = self.canvas.create_text(x, y - 50, text="", fill="black", font=("Helvetica", 12))
+            self.player_texts.append(text_id)
 
-        self.player_hand_label = tk.Label(player_frame, text="", font=("Helvetica", 12))
-        self.player_hand_label.pack(anchor="w")
+        # dealer label
+        self.dealer_text = self.canvas.create_text(400, 100, text="Dealer", fill="black", font=("Helvetica", 16))
+        self.dealer_hand_text = self.canvas.create_text(400, 150, text="", fill="black", font=("Helvetica", 12))
 
-        self.player_value_label = tk.Label(player_frame, text="", font=("Helvetica", 10))
-        self.player_value_label.pack(anchor="w")
+        # status bar
+        self.status = tk.Label(self, text="", anchor="w", bg="black", fg="yellow", font=("Helvetica", 12))
+        self.status.pack(fill="x")
 
-        self.hit_button = tk.Button(self, text="Hit", width=12, command=self.on_hit)
-        self.hit_button.grid(row=2, column=0, padx=pad, pady=pad)
+        # controls
+        controls = tk.Frame(self, bg="grey")
+        controls.pack(pady=10)
 
-        self.stand_button = tk.Button(self, text="Stand", width=12, command=self.on_stand)
-        self.stand_button.grid(row=2, column=1, padx=pad, pady=pad)
+        self.hit_button = tk.Button(controls, text="Hit", command=self.on_hit, state="disabled")
+        self.hit_button.grid(row=0, column=0, padx=10)
 
-        self.newgame_button = tk.Button(self, text="New Game", width=26, command=self.start_new_round)
-        self.newgame_button.grid(row=3, column=0, columnspan=2, padx=pad, pady=(0, pad))
+        self.stand_button = tk.Button(controls, text="Stand", command=self.on_stand, state="disabled")
+        self.stand_button.grid(row=0, column=1, padx=10)
 
-        self.status = tk.Label(self, text="", anchor="w")
-        self.status.grid(row=4, column=0, columnspan=2, sticky="ew", padx=pad, pady=(0, pad))
+        self.newgame_button = tk.Button(controls, text="New Round", command=self.start_new_round, state="disabled")
+        self.newgame_button.grid(row=0, column=2, padx=10)
 
-        self.bind("<Key-h>", lambda e: self.on_hit())
-        self.bind("<Key-s>", lambda e: self.on_stand())
+    def choose_seat(self, idx):
+        if self.player_seat is None:
+            if self.game.sit_down(idx, "You"):
+                self.player_seat = idx
+                self.canvas.itemconfig(f"seat{idx}", fill="blue")
+                self.status.config(text=f"You sat down at seat {idx+1}")
+                self.newgame_button.config(state="normal")
 
     def start_new_round(self):
         message = self.game.new_round()
-        self._update_ui(hide_dealer=True)
+        self.update_ui(hide_dealer=True)
+        self.hit_button.config(state="normal")
+        self.stand_button.config(state="normal")
         if message:
             self.status.config(text=message)
-            self._update_ui(hide_dealer=False)
+            self.update_ui(hide_dealer=False)
 
     def on_hit(self):
-        message = self.game.player_hit()
-        self._update_ui(hide_dealer=True)
+        message = self.game.player_hit(self.player_seat)
+        self.update_ui(hide_dealer=True)
         if message:
             self.status.config(text=message)
-            self._update_ui(hide_dealer=False)
-
-    def on_stand(self):
-        message = self.game.player_stand()
-        self._update_ui(hide_dealer=False)
-        if message:
-            self.status.config(text=message)
-
-    def _update_ui(self, hide_dealer=True):
-        dealer = self.game.dealer
-        player = self.game.player
-
-        self.dealer_hand_label.config(text=dealer.show_hand_str(hide_first=hide_dealer))
-        self.dealer_value_label.config(
-            text=f"Value: {dealer.calculate_value()}" if not hide_dealer else "Value: [Hidden]"
-        )
-
-        self.player_hand_label.config(text=player.show_hand_str())
-        self.player_value_label.config(text=f"Value: {player.calculate_value()}")
-
-        if not self.game.in_round:
+            self.update_ui(hide_dealer=False)
             self.hit_button.config(state="disabled")
             self.stand_button.config(state="disabled")
+
+    def on_stand(self):
+        message = self.game.player_stand(self.player_seat)
+        self.update_ui(hide_dealer=False)
+        if message:
+            self.status.config(text=message)
+            self.hit_button.config(state="disabled")
+            self.stand_button.config(state="disabled")
+
+    def update_ui(self, hide_dealer=True):
+        dealer = self.game.dealer
+
+        if hide_dealer:
+            self.canvas.itemconfig(
+                self.dealer_hand_text,
+                text=f"{dealer.show_hand_str(hide_first=True)} = [Hidden]"
+            )
         else:
-            self.hit_button.config(state="normal")
-            self.stand_button.config(state="normal")
+            dvals = dealer.possible_values()
+            dealer_score = str(dealer.best_value()) if self.game.in_round else ", ".join(str(v) for v in dvals)
+            self.canvas.itemconfig(
+                self.dealer_hand_text,
+                text=f"{dealer.show_hand_str()} = {dealer_score}"
+            )
+
+        for i, player in enumerate(self.game.slots):
+            if player:
+                if player.finished:
+                    player_score = str(player.best_value())
+                else:
+                    pvals = player.possible_values()
+                    player_score = ", ".join(str(v) for v in pvals)
+                self.canvas.itemconfig(
+                    self.player_texts[i],
+                    text=f"{player.show_hand_str()} = {player_score}"
+                )
+            else:
+                self.canvas.itemconfig(self.player_texts[i], text="")
+
+
