@@ -1,5 +1,6 @@
 import tkinter as tk
 from game.Game import Game
+from GUI.DeckGUI import DeckGUI
 
 class GameGUI(tk.Tk):
     def __init__(self):
@@ -13,6 +14,15 @@ class GameGUI(tk.Tk):
         self._build_ui()
 
     def _build_ui(self):
+        # Menu bar
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+
+        # Deck menu
+        deck_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Deck", menu=deck_menu)
+        deck_menu.add_command(label="View Deck", command=self.show_deck_window)
+
         # Main container
         main_frame = tk.Frame(self, bg="#1a5f1a", padx=20, pady=20)
         main_frame.pack(fill="both", expand=True)
@@ -405,4 +415,6 @@ class GameGUI(tk.Tk):
                         else:
                             self.player_value_label.config(text=f"Value: {player_score}", fg="yellow")
 
-
+    def show_deck_window(self):
+        """Open a new window to display all cards remaining in the deck"""
+        DeckGUI(self, self.game.deck)
