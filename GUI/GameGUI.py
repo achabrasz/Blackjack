@@ -1,6 +1,7 @@
 import tkinter as tk
 from game.Game import Game
 from GUI.DeckGUI import DeckGUI
+from agents.MonteCarlo import MonteCarloSimulator
 
 class GameGUI(tk.Tk):
     def __init__(self):
@@ -11,6 +12,7 @@ class GameGUI(tk.Tk):
 
         self.game = Game(num_slots=7)
         self.player_seat = None  # chosen seat index
+        self.monte_carlo = MonteCarloSimulator(num_simulations=100000, use_multiprocessing=True)
         self._build_ui()
 
     def _build_ui(self):
@@ -31,6 +33,17 @@ class GameGUI(tk.Tk):
         title = tk.Label(main_frame, text="♠ ♥ BLACKJACK ♣ ♦",
                         font=("Arial", 24, "bold"), bg="#1a5f1a", fg="gold")
         title.pack(pady=(0, 20))
+
+        # Monte Carlo probabilities frame (top left corner)
+        self.mc_frame = tk.LabelFrame(main_frame, text="🎲 Win Probabilities (Monte Carlo)",
+                                      font=("Arial", 11, "bold"), bg="#0d400d", fg="white",
+                                      bd=3, relief="raised", padx=10, pady=10)
+        self.mc_frame.pack(fill="x", pady=(0, 10))
+
+        self.mc_label = tk.Label(self.mc_frame, text="Start a round to see probabilities",
+                                font=("Courier", 10), bg="#0d400d", fg="yellow",
+                                justify="left", anchor="w")
+        self.mc_label.pack(anchor="w")
 
         # Dealer section
         dealer_frame = tk.LabelFrame(main_frame, text="🎩 DEALER",
@@ -415,6 +428,83 @@ class GameGUI(tk.Tk):
                         else:
                             self.player_value_label.config(text=f"Value: {player_score}", fg="yellow")
 
+        # Update Monte Carlo probabilities if game is active
+        if self.game.in_round and not hide_dealer:
+            self.mc_label.config(text="Round ended")
+        elif self.game.in_round:
+            self.update_monte_carlo_probabilities()
+
     def show_deck_window(self):
         """Open a new window to display all cards remaining in the deck"""
         DeckGUI(self, self.game.deck)
+
+    def get_game_state(self):
+        """Get current game state for Monte Carlo simulation"""
+        if self.player_seat is None:
+            return None
+
+        player = self.game.slots[self.player_seat]
+        if not player or not self.game.in_round:
+            return None
+
+        # Get current active hand
+        current_hand = player.get_current_hand()
+
+        return {
+            'player_hand': current_hand.copy(),
+            'dealer_hand': self.game.dealer.hand.copy(),
+            'deck_cards': self.game.deck.cards.copy()
+        }
+
+    def get_available_actions(self):
+        """Get list of available actions for current game state"""
+        if self.player_seat is None:
+            return []
+
+        player = self.game.slots[self.player_seat]
+        if not player or not self.game.in_round:
+            return []
+
+        actions = ['hit', 'stand']
+
+        if player.can_double():
+            actions.append('double')
+
+        if player.can_split():
+            actions.append('split')
+
+        return actions
+
+    def update_monte_carlo_probabilities(self):
+        """Calculate and display Monte Carlo win probabilities"""
+        game_state = self.get_game_state()
+        available_actions = self.get_available_actions()
+
+        if not game_state or not available_actions:
+            self.mc_label.config(text="No actions available")
+            return
+
+        # Calculate probabilities in a separate thread to avoid blocking UI
+        # For now, we'll do it synchronously (can be optimized later)
+        probabilities = self.monte_carlo.get_action_probabilities(game_state, available_actions)
+
+        # Format and display results
+        # probabilities is now {action: [probability, time]}
+        prob_text = ""
+        action_icons = {
+            'hit': '🃏',
+            'stand': '✋',
+            'double': '💰',
+            'split': '✂️'
+        }
+
+        # Sort by probability (index 0 of the array)
+        for action, data in sorted(probabilities.items(), key=lambda x: x[1][0], reverse=True):
+            icon = action_icons.get(action, '•')
+            probability = data[0]  # First element is probability
+            time_taken = data[1]   # Second element is time
+            percentage = probability * 100
+            prob_text += f"{icon} {action.upper()}: {percentage:.1f}% ({time_taken:.3f}s)\n"
+
+        self.mc_label.config(text=prob_text.strip())
+
