@@ -3,7 +3,7 @@ from entities.Player import Player
 
 class Game:
     def __init__(self, num_slots=7):
-        self.deck = Deck(num_decks=1)
+        self.deck = Deck(num_decks=5)
         self.dealer = Player("Dealer")
         self.slots = [None] * num_slots  # seats around the table
         self.in_round = False

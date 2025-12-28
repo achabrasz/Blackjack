@@ -1,4 +1,4 @@
-from game.GameGUI import GameGUI
+from GUI.GameGUI import GameGUI
 
 
 def main():
