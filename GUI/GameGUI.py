@@ -12,7 +12,7 @@ class GameGUI(tk.Tk):
 
         self.game = Game(num_slots=7)
         self.player_seat = None  # chosen seat index
-        self.monte_carlo = MonteCarloSimulator(num_simulations=100000, use_multiprocessing=True)
+        self.monte_carlo = MonteCarloSimulator(num_simulations=400000)
         self._build_ui()
 
     def _build_ui(self):
@@ -447,6 +447,10 @@ class GameGUI(tk.Tk):
         if not player or not self.game.in_round:
             return None
 
+        # Ensure deck has enough cards for simulation
+        if len(self.game.deck) < 20:
+            self.game.deck.build()  # Rebuild deck if running low
+
         # Get current active hand
         current_hand = player.get_current_hand()
 
@@ -482,6 +486,17 @@ class GameGUI(tk.Tk):
 
         if not game_state or not available_actions:
             self.mc_label.config(text="No actions available")
+            return
+
+        # Debug: Check game state
+        player_hand = game_state['player_hand']
+        dealer_hand = game_state['dealer_hand']
+        deck_cards = game_state['deck_cards']
+        
+        print(f"[MC DEBUG] Player hand: {len(player_hand)} cards, Dealer hand: {len(dealer_hand)} cards, Deck: {len(deck_cards)} cards")
+        
+        if len(deck_cards) < 15:
+            self.mc_label.config(text="Not enough cards in deck to simulate")
             return
 
         # Calculate probabilities in a separate thread to avoid blocking UI
